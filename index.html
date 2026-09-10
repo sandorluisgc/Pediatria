@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1a6fb5">
+<meta name="application-name" content="Historia Clínica Ped.">
+<meta name="apple-mobile-web-app-title" content="Historia Clínica Ped.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<script>
+// Registrar Service Worker inline
+if ("serviceWorker" in navigator) {
+  const swCode = `
+const CACHE = "hc-v1";
+const FILES = ["/pediatria/", "/pediatria/index.html"];
+self.addEventListener("install", e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));
+  self.skipWaiting();
+});
+self.addEventListener("activate", e => {
+  e.waitUntil(caches.keys().then(keys =>
+    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+  ));
+  self.clients.claim();
+});
+self.addEventListener("fetch", e => {
+  e.respondWith(
+    caches.match(e.request).then(r => r || fetch(e.request).catch(() => caches.match("/pediatria/")))
+  );
+});
+  `;
+  const blob = new Blob([swCode], {type: "application/javascript"});
+  const swUrl = URL.createObjectURL(blob);
+  navigator.serviceWorker.register(swUrl).catch(() => {});
+}
+</script>
+<meta http-equiv="Content-Security-Policy" content="default-src * 'self' 'unsafe-inline' 'unsafe-eval' data: blob:;">
+<title>Historia Clínica Pediátrica</title>
+<style>
+  :root {
+    --azul: #1a6fb5;
+    --azul-claro: #e8f2fc;
+    --azul-medio: #3d8fd6;
+    --verde: #1a9e6f;
+    --verde-claro: #e6f7f2;
+    --texto: #1c2b3a;
+    --gris: #6b7f91;
+    --gris-claro: #f0f4f8;
+    --borde: #ccd9e6;
+    --blanco: #ffffff;
+    --rojo: #d94040;
+    --naranja: #e07b2a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #dde8f5;
+    color: var(--texto);
+    min-height: 100vh;
+    font-size: 15px;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--azul);
+    color: var(--blanco);
+    padding: 14px 16px 10px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(26,111,181,0.25);
+  }
+  header h1 {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+  header p {
+    font-size: 12px;
+    opacity: 0.8;
+    margin-top: 2px;
+  }
+
+  /* ── PACIENTE ACTIVO BADGE ── */
+  #paciente-badge {
+    display: none;
+    background: var(--verde);
+    color: white;
+    padding: 6px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  /* ── NAV TABS ── */
+  nav {
+    display: flex;
+    overflow-x: auto;
+    background: var(--blanco);
+    border-bottom: 2px solid var(--borde);
+    gap: 0;
+    scrollbar-width: none;
+  }
+  nav::-webkit-scrollbar { display: none; }
+  nav button {
+    flex: 0 0 auto;
+    padding: 10px 14px;
+    border: none;
+    background: transparent;
+    color: var(--gris);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.18s;
+    white-space: nowrap;
+    margin-bottom: -2px;
+  }
+  nav button.active {
+    color: var(--azul);
+    border-bottom-color: var(--azul);
+    font-weight: 700;
+  }
+  nav button:active { opacity: 0.7; }
+
+  /* ── PANTALLAS ── */
+  .pantalla { display: none; padding: 16px; }
+  .pantalla.activa { display: block; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--blanco);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    border-left: 4px solid var(--azul);
+  }
+  .card.verde { border-left-color: var(--verde); }
+  .card.naranja { border-left-color: var(--naranja); }
+  .card.rojo { border-left-color: var(--rojo); }
+
+  .card-titulo {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--azul);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .card.verde .card-titulo { color: var(--verde); }
+  .card.naranja .card-titulo { color: var(--naranja); }
+  .card.rojo .card-titulo { color: var(--rojo); }
+
+  /* ── CAMPOS ── */
+  .campo {
+    margin-bottom: 10px;
+  }
+  .campo label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--gris);
+    margin-bottom: 3px;
+  }
+  .campo input[type="text"],
+  .campo input[type="date"],
+  .campo input[type="time"],
+  .campo input[type="number"],
+  .campo textarea,
+  .campo select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1.5px solid var(--borde);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--texto);
+    background: var(--gris-claro);
+    transition: border-color 0.15s;
+    -webkit-appearance: none;
+  }
+  .campo input:focus,
+  .campo textarea:focus,
+  .campo select:focus {
+    outline: none;
+    border-color: var(--azul-medio);
+    background: var(--blanco);
+  }
+  .campo textarea {
+    resize: vertical;
+    min-height: 64px;
+    line-height: 1.5;
+  }
+
+  /* ── FILA DE 2 ── */
+  .fila2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .fila3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+  /* ── SISTEMAS SIGNO VITAL ── */
+  .sistema-row {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+    align-items: end;
+  }
+  .sistema-row .campo { margin-bottom: 0; }
+
+  /* ── PARES CRANEALES ── */
+  .pares-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .par-item label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--gris);
+    display: block;
+    margin-bottom: 2px;
+    text-align: center;
+  }
+  .par-item input {
+    width: 100%;
+    padding: 6px 4px;
+    border: 1.5px solid var(--borde);
+    border-radius: 6px;
+    font-size: 13px;
+    text-align: center;
+    background: var(--gris-claro);
+    -webkit-appearance: none;
+  }
+  .par-item input:focus {
+    outline: none;
+    border-color: var(--azul-medio);
+    background: var(--blanco);
+  }
+
+  /* ── SECCIÓN TITULO ── */
+  .seccion-titulo {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--azul);
+    padding: 6px 0 4px;
+    border-bottom: 1px solid var(--borde);
+    margin-bottom: 10px;
+    margin-top: 4px;
+  }
+
+  /* ── BOTONES ── */
+  .btn {
+    display: inline-block;
+    padding: 11px 20px;
+    border-radius: 10px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 10px;
+  }
+  .btn:active { opacity: 0.8; transform: scale(0.98); }
+  .btn-azul { background: var(--azul); color: white; }
+  .btn-verde { background: var(--verde); color: white; }
+  .btn-gris  { background: var(--borde); color: var(--texto); }
+  .btn-rojo  { background: var(--rojo); color: white; }
+
+  /* ── PANTALLA INICIO ── */
+  .inicio-hero {
+    background: linear-gradient(135deg, var(--azul) 0%, #2a8fd4 100%);
+    border-radius: 14px;
+    color: white;
+    padding: 24px 20px;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  .inicio-hero .icono { font-size: 48px; margin-bottom: 8px; }
+  .inicio-hero h2 { font-size: 20px; font-weight: 700; }
+  .inicio-hero p  { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+
+  .paciente-card {
+    background: var(--blanco);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.15s;
+  }
+  .paciente-card:active { border-color: var(--azul); }
+  .paciente-card.seleccionado { border-color: var(--azul); background: var(--azul-claro); }
+  .paciente-avatar {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    background: var(--azul-claro);
+    color: var(--azul);
+    font-weight: 700;
+    font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .paciente-info h3 { font-size: 15px; font-weight: 700; }
+  .paciente-info p  { font-size: 12px; color: var(--gris); margin-top: 2px; }
+  .paciente-meta {
+    margin-left: auto;
+    text-align: right;
+  }
+  .paciente-meta span {
+    font-size: 11px;
+    background: var(--azul-claro);
+    color: var(--azul);
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .paciente-meta small { font-size: 11px; color: var(--gris); }
+
+  /* EVOLUCIONES LIST */
+  .evolucion-item {
+    background: var(--blanco);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border-left: 4px solid var(--naranja);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .evolucion-item .ev-info h4 { font-size: 14px; font-weight: 600; }
+  .evolucion-item .ev-info p  { font-size: 12px; color: var(--gris); margin-top: 2px; }
+  .evolucion-item .ev-tipo {
+    font-size: 11px;
+    background: #fff3e6;
+    color: var(--naranja);
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .ev-primera { border-left-color: var(--azul); }
+  .ev-primera .ev-tipo { background: var(--azul-claro); color: var(--azul); }
+
+  /* TOAST */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #1c2b3a;
+    color: white;
+    padding: 10px 22px;
+    border-radius: 30px;
+    font-size: 13px;
+    font-weight: 500;
+    z-index: 9999;
+    transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  #toast.visible { transform: translateX(-50%) translateY(0); }
+
+  /* MODAL */
+  #modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 200;
+    align-items: flex-end;
+  }
+  #modal-overlay.abierto { display: flex; }
+  #modal-box {
+    background: white;
+    border-radius: 20px 20px 0 0;
+    padding: 20px 16px;
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+  #modal-box h3 { font-size: 16px; font-weight: 700; margin-bottom: 14px; color: var(--azul); }
+
+  /* SEPARADOR ── */
+  .sep {
+    border: none;
+    border-top: 1px solid var(--borde);
+    margin: 14px 0;
+  }
+
+  .etiqueta-verde {
+    display: inline-block;
+    background: var(--verde-claro);
+    color: var(--verde);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 12px;
+    margin-bottom: 8px;
+  }
+
+  /* IMPRESIÓN placeholder */
+  @media print {
+    nav, header, .btn, #toast, #modal-overlay { display: none !important; }
+    .pantalla { display: block !important; }
+    body { background: white; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Historia Clínica Pediátrica</h1>
+  <p>Uso local · sin conexión</p>
+</header>
+
+<div id="paciente-badge"></div>
+
+<nav id="nav-tabs">
+  <button class="active" onclick="irA('inicio')">Inicio</button>
+  <button onclick="irA('historia')">Historia Clínica</button>
+  <button onclick="irA('examen')">Examen Físico</button>
+  <button onclick="irA('primera')">1ª Evolución</button>
+  <button onclick="irA('evolucion')">Evolución</button>
+  <button onclick="irA('lista')">Registros</button>
+</nav>
+
+<!-- ══════════ INICIO ══════════ -->
+<div class="pantalla activa" id="p-inicio">
+  <div class="inicio-hero">
+    <div class="icono">🏥</div>
+    <h2>Historia Clínica Pediátrica</h2>
+    <p>Registra y consulta historias sin internet</p>
+  </div>
+
+  <div class="card verde">
+    <div class="card-titulo">Nuevo paciente</div>
+    <div class="campo">
+      <label>Nombre completo del paciente</label>
+      <input type="text" id="nuevo-nombre" placeholder="Ej: Juan García Pérez">
+    </div>
+    <button class="btn btn-verde" onclick="crearPaciente()">Crear expediente</button>
+  </div>
+
+  <div class="card">
+    <div class="card-titulo">Pacientes registrados</div>
+    <div id="lista-pacientes-inicio">
+      <p style="color:var(--gris);font-size:13px;text-align:center;padding:12px 0;">Sin pacientes aún. Crea uno arriba.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ HISTORIA CLÍNICA ══════════ -->
+<div class="pantalla" id="p-historia">
+  <div class="card">
+    <div class="card-titulo">Historia Clínica</div>
+    <div class="fila2">
+      <div class="campo"><label>Fecha</label><input type="date" id="hc-fecha"></div>
+      <div class="campo"><label>Edad</label><input type="text" id="hc-edad" placeholder="Ej: 5 años"></div>
+    </div>
+    <div class="fila2">
+      <div class="campo"><label>Hora</label><input type="time" id="hc-hora"></div>
+      <div class="campo"><label>Traído por</label><input type="text" id="hc-traido" placeholder="Madre / Padre..."></div>
+    </div>
+    <div class="campo">
+      <label>MI</label>
+      <textarea id="hc-mi" rows="2" placeholder="Motivo de ingreso..."></textarea>
+    </div>
+    <div class="campo">
+      <label>HGA</label>
+      <textarea id="hc-hga" rows="4" placeholder="(x) de (x) edad, con antecedentes de salud aparentes/ con antecedentes de (x) con tto (x)/sin tto q es traído por (x) a nuestro servicio por presentar (x) q inició (x) y (x), q se caracteriza por (x)"></textarea>
+    </div>
+    <div class="campo">
+      <label>APP</label>
+      <textarea id="hc-app" rows="2"></textarea>
+    </div>
+    <div class="campo">
+      <label>APF</label>
+      <textarea id="hc-apf" rows="2"></textarea>
+    </div>
+  </div>
+
+  <div class="card verde">
+    <div class="card-titulo">Antecedentes perinatales</div>
+    <div class="seccion-titulo">Prenatales</div>
+    <div class="fila3">
+      <div class="campo"><label>E</label><input type="text" id="hc-pre-e"></div>
+      <div class="campo"><label>P</label><input type="text" id="hc-pre-p"></div>
+      <div class="campo"><label>A</label><input type="text" id="hc-pre-a"></div>
+    </div>
+    <div class="fila2">
+      <div class="campo"><label>Problema</label><input type="text" id="hc-pre-problema"></div>
+      <div class="campo"></div>
+    </div>
+
+    <div class="seccion-titulo">Natales</div>
+    <div class="fila2">
+      <div class="campo"><label>TG</label><input type="text" id="hc-nat-tg"></div>
+      <div class="campo"><label>Parto</label><input type="text" id="hc-nat-parto"></div>
+    </div>
+    <div class="fila3">
+      <div class="campo"><label>Peso</label><input type="text" id="hc-nat-peso"></div>
+      <div class="campo"><label>Talla</label><input type="text" id="hc-nat-talla"></div>
+      <div class="campo"><label>Asfixia</label><input type="text" id="hc-nat-asfixia"></div>
+    </div>
+    <div class="fila2">
+      <div class="campo"><label>Cianosis</label><input type="text" id="hc-nat-cianosis"></div>
+      <div class="campo"><label>Oxigenación</label><input type="text" id="hc-nat-oxigenacion"></div>
+    </div>
+
+    <div class="seccion-titulo">Postnatales</div>
+    <div class="fila2">
+      <div class="campo"><label>Ictero</label><input type="text" id="hc-post-ictero"></div>
+      <div class="campo"><label>Anemia</label><input type="text" id="hc-post-anemia"></div>
+    </div>
+    <div class="fila2">
+      <div class="campo"><label>Caída del C.U</label><input type="text" id="hc-post-cu"></div>
+      <div class="campo"><label>Alergia</label><input type="text" id="hc-post-alergia"></div>
+    </div>
+
+    <div class="seccion-titulo">Desarrollo</div>
+    <div class="fila3">
+      <div class="campo"><label>Desarrollo p.</label><input type="text" id="hc-des-dp"></div>
+      <div class="campo"><label>Alimentación</label><input type="text" id="hc-des-alim"></div>
+      <div class="campo"><label>Vacunación</label><input type="text" id="hc-des-vac"></div>
+    </div>
+  </div>
+
+  <div class="card naranja">
+    <div class="card-titulo">Datos familiares</div>
+    <div class="seccion-titulo">Padre</div>
+    <div class="fila2">
+      <div class="campo"><label>Edad</label><input type="text" id="hc-pad-edad"></div>
+      <div class="campo"><label>Grado</label><input type="text" id="hc-pad-grado"></div>
+    </div>
+    <div class="fila2">
+      <div class="campo"><label>Ocupación</label><input type="text" id="hc-pad-ocup"></div>
+      <div class="campo"><label>Salario</label><input type="text" id="hc-pad-sal"></div>
+    </div>
+    <div class="seccion-titulo">Madre</div>
+    <div class="fila2">
+      <div class="campo"><label>Edad</label><input type="text" id="hc-mad-edad"></div>
+      <div class="campo"><label>Grado</label><input type="text" id="hc-mad-grado"></div>
+    </div>
+    <div class="fila2">
+      <div class="campo"><label>Ocupación</label><input type="text" id="hc-mad-ocup"></div>
+      <div class="campo"><label>Salario</label><input type="text" id="hc-mad-sal"></div>
+    </div>
+  </div>
+
+  <div class="card rojo">
+    <div class="card-titulo">Medio ecológico</div>
+    <div class="fila2">
+      <div class="campo"><label>Casa M</label><input type="text" id="hc-casa-m"></div>
+      <div class="campo"><label>Casa T</label><input type="text" id="hc-casa-t"></div>
+    </div>
+    <div class="fila2">
+      <div class="campo"><label>Techo P</label><input type="text" id="hc-techo-p"></div>
+      <div class="campo"><label>Techo T</label><input type="text" id="hc-techo-t"></div>
+    </div>
+    <div class="fila2">
+      <div class="campo"><label>Baño S</label><input type="text" id="hc-bano-s"></div>
+      <div class="campo"><label>Baño L</label><input type="text" id="hc-bano-l"></div>
+    </div>
+    <div class="fila2">
+      <div class="campo"><label>Agua A</label><input type="text" id="hc-agua-a"></div>
+      <div class="campo"><label>Agua P</label><input type="text" id="hc-agua-p"></div>
+    </div>
+    <div class="fila2">
+      <div class="campo"><label>Animales</label><input type="text" id="hc-animales"></div>
+      <div class="campo"><label>Hábitos T</label><input type="text" id="hc-habitos"></div>
+    </div>
+    <div class="fila2">
+      <div class="campo"><label>Piso</label><input type="text" id="hc-piso"></div>
+      <div class="campo"><label>Hacinamiento</label><input type="text" id="hc-hacinamiento"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-titulo">Interrogatorio por sistemas</div>
+    <div class="sistema-row">
+      <div class="campo"><label>S.R</label><input type="text" id="hc-sr"></div>
+      <div class="campo"><label>FR</label><input type="text" id="hc-fr"></div>
+      <div class="campo"><label>SO</label><input type="text" id="hc-so"></div>
+    </div>
+    <div class="sistema-row">
+      <div class="campo"><label>S.Cv</label><input type="text" id="hc-scv"></div>
+      <div class="campo"><label>FC</label><input type="text" id="hc-fc"></div>
+      <div class="campo"><label>Llenado cap. (s)</label><input type="text" id="hc-llenado"></div>
+    </div>
+    <div class="campo"><label>S.D</label><input type="text" id="hc-sd"></div>
+    <div class="campo"><label>SNC</label><input type="text" id="hc-snc"></div>
+    <div class="campo"><label>S.H</label><input type="text" id="hc-sh"></div>
+    <div class="fila3">
+      <div class="campo"><label>SOMA M</label><input type="text" id="hc-soma-m"></div>
+      <div class="campo"><label>H</label><input type="text" id="hc-soma-h"></div>
+      <div class="campo"><label>A</label><input type="text" id="hc-soma-a"></div>
+    </div>
+    <div class="campo"><label>Otros</label><textarea id="hc-otros" rows="2"></textarea></div>
+  </div>
+
+  <button class="btn btn-azul" onclick="guardarSeccion('historia')">Guardar Historia Clínica</button>
+</div>
+
+<!-- ══════════ EXAMEN FÍSICO ══════════ -->
+<div class="pantalla" id="p-examen">
+  <div class="card">
+    <div class="card-titulo">Examen Físico General</div>
+    <div class="campo"><label>Marcha</label><input type="text" id="ef-marcha"></div>
+    <div class="campo"><label>Facies</label><input type="text" id="ef-facies"></div>
+    <div class="campo"><label>Piel</label><input type="text" id="ef-piel"></div>
+    <div class="campo"><label>Mucosas</label><input type="text" id="ef-mucosas"></div>
+    <div class="campo"><label>Fanelas</label><input type="text" id="ef-fanelas"></div>
+    <div class="fila2">
+      <div class="campo"><label>Talla</label><input type="text" id="ef-talla" placeholder="cm"></div>
+      <div class="campo"><label>Peso</label><input type="text" id="ef-peso" placeholder="kg"></div>
+    </div>
+    <div class="campo"><label>Panículo adiposo</label><input type="text" id="ef-paniculo"></div>
+  </div>
+
+  <div class="card verde">
+    <div class="card-titulo">Examen Físico Regional</div>
+    <div class="campo"><label>Cabeza</label><textarea id="ef-cabeza" rows="2"></textarea></div>
+    <div class="campo"><label>Cuello</label><textarea id="ef-cuello" rows="2"></textarea></div>
+    <div class="campo"><label>Tórax</label><textarea id="ef-torax" rows="2"></textarea></div>
+    <div class="campo"><label>Abdomen</label><textarea id="ef-abdomen" rows="2"></textarea></div>
+    <div class="campo"><label>Columna vertebral</label><textarea id="ef-columna" rows="2"></textarea></div>
+    <div class="campo"><label>Extremidades</label><textarea id="ef-extremidades" rows="2"></textarea></div>
+  </div>
+
+  <div class="card naranja">
+    <div class="card-titulo">Examen Físico por Sistemas</div>
+    <div class="sistema-row">
+      <div class="campo"><label>S.R</label><input type="text" id="ef-sr"></div>
+      <div class="campo"><label>FR</label><input type="text" id="ef-fr"></div>
+      <div class="campo"><label>SO</label><input type="text" id="ef-so"></div>
+    </div>
+    <div class="sistema-row">
+      <div class="campo"><label>S.Cv</label><input type="text" id="ef-scv"></div>
+      <div class="campo"><label>FC</label><input type="text" id="ef-fc"></div>
+      <div class="campo"><label>Llenado cap. (s)</label><input type="text" id="ef-llenado"></div>
+    </div>
+    <div class="campo"><label>Abd</label><input type="text" id="ef-abd"></div>
+    <div class="campo"><label>S.H</label><input type="text" id="ef-sh"></div>
+    <div class="fila3">
+      <div class="campo"><label>SOMA M</label><input type="text" id="ef-soma-m"></div>
+      <div class="campo"><label>H</label><input type="text" id="ef-soma-h"></div>
+      <div class="campo"><label>A</label><input type="text" id="ef-soma-a"></div>
+    </div>
+    <div class="campo"><label>Otros</label><textarea id="ef-otros" rows="2"></textarea></div>
+  </div>
+
+  <div class="card rojo">
+    <div class="card-titulo">SNC</div>
+    <div class="campo"><label>Taxia</label><input type="text" id="ef-taxia"></div>
+    <div class="campo"><label>Motilidad activa</label><input type="text" id="ef-mot-act"></div>
+    <div class="campo"><label>Motilidad pasiva</label><input type="text" id="ef-mot-pas"></div>
+    <div class="campo"><label>Motilidad inactiva</label><input type="text" id="ef-mot-inact"></div>
+    <div class="campo"><label>Esfera meníngea</label><input type="text" id="ef-meningea"></div>
+    <div class="campo"><label>Reflectividad</label><input type="text" id="ef-reflectividad"></div>
+    <div class="campo"><label>Sensibilidad superficial</label><input type="text" id="ef-sens-sup"></div>
+    <div class="campo"><label>Sensibilidad profunda</label><input type="text" id="ef-sens-prof"></div>
+
+    <div class="seccion-titulo">Pares craneales</div>
+    <div class="pares-grid">
+      <div class="par-item"><label>I</label><input type="text" id="ef-par1"></div>
+      <div class="par-item"><label>II</label><input type="text" id="ef-par2"></div>
+      <div class="par-item"><label>III</label><input type="text" id="ef-par3"></div>
+      <div class="par-item"><label>IV</label><input type="text" id="ef-par4"></div>
+      <div class="par-item"><label>V</label><input type="text" id="ef-par5"></div>
+      <div class="par-item"><label>VI</label><input type="text" id="ef-par6"></div>
+      <div class="par-item"><label>VII</label><input type="text" id="ef-par7"></div>
+      <div class="par-item"><label>VIII</label><input type="text" id="ef-par8"></div>
+      <div class="par-item"><label>IX</label><input type="text" id="ef-par9"></div>
+      <div class="par-item"><label>X</label><input type="text" id="ef-par10"></div>
+      <div class="par-item"><label>XI</label><input type="text" id="ef-par11"></div>
+      <div class="par-item"><label>XII</label><input type="text" id="ef-par12"></div>
+    </div>
+  </div>
+
+  <button class="btn btn-azul" onclick="guardarSeccion('examen')">Guardar Examen Físico</button>
+</div>
+
+<!-- ══════════ PRIMERA EVOLUCIÓN ══════════ -->
+<div class="pantalla" id="p-primera">
+  <div class="card">
+    <div class="card-titulo">Recepción médica y primera evolución</div>
+    <div class="fila2">
+      <div class="campo"><label>Fecha</label><input type="date" id="pe-fecha"></div>
+      <div class="campo"><label>Edad</label><input type="text" id="pe-edad"></div>
+    </div>
+    <div class="fila2">
+      <div class="campo"><label>Hora</label><input type="time" id="pe-hora"></div>
+      <div class="campo"><label>Traído por</label><input type="text" id="pe-traido"></div>
+    </div>
+    <div class="campo"><label>Nombre</label><input type="text" id="pe-nombre"></div>
+    <div class="campo"><label>Residencia</label><input type="text" id="pe-residencia"></div>
+    <div class="campo"><label>MI</label><textarea id="pe-mi" rows="2"></textarea></div>
+    <div class="fila2">
+      <div class="campo"><label>APS</label><input type="text" id="pe-aps"></div>
+      <div class="campo"><label>Fecha (APS)</label><input type="date" id="pe-aps-fecha"></div>
+    </div>
+    <div class="campo"><label>Tto</label><input type="text" id="pe-aps-tto"></div>
+    <div class="campo">
+      <label>HGA</label>
+      <textarea id="pe-hga" rows="4" placeholder="(x) de (x) años de edad, con antecedentes de salud aparentes/ con antecedentes de (x) con tto (x)/sin tto q es traído por (x) a nuestro servicio por presentar (x) q inició (x) y (x), q se caracteriza por (x) y sede con (x). Niega (x). Se decide su ingreso."></textarea>
+    </div>
+  </div>
+
+  <div class="card verde">
+    <div class="card-titulo">Examen físico (datos +)</div>
+    <div class="campo"><label>TCS</label><input type="text" id="pe-tcs"></div>
+    <div class="campo"><label>P y M</label><input type="text" id="pe-pym"></div>
+    <div class="sistema-row">
+      <div class="campo"><label>S.R</label><input type="text" id="pe-sr"></div>
+      <div class="campo"><label>FR</label><input type="text" id="pe-fr"></div>
+      <div class="campo"><label>SO</label><input type="text" id="pe-so"></div>
+    </div>
+    <div class="sistema-row">
+      <div class="campo"><label>S.Cv</label><input type="text" id="pe-scv"></div>
+      <div class="campo"><label>FC</label><input type="text" id="pe-fc"></div>
+      <div class="campo"><label>Llenado cap. (s)</label><input type="text" id="pe-llenado"></div>
+    </div>
+    <div class="campo"><label>Abd</label><input type="text" id="pe-abd"></div>
+    <div class="campo"><label>SNC</label><input type="text" id="pe-snc"></div>
+    <div class="campo"><label>S.H</label><input type="text" id="pe-sh"></div>
+    <div class="fila3">
+      <div class="campo"><label>SOMA M</label><input type="text" id="pe-soma-m"></div>
+      <div class="campo"><label>H</label><input type="text" id="pe-soma-h"></div>
+      <div class="campo"><label>A</label><input type="text" id="pe-soma-a"></div>
+    </div>
+    <div class="campo"><label>Otros</label><textarea id="pe-otros" rows="2"></textarea></div>
+  </div>
+
+  <div class="card naranja">
+    <div class="card-titulo">Conclusiones</div>
+    <div class="campo"><label>Comentario médico</label><textarea id="pe-comentario" rows="3"></textarea></div>
+    <div class="campo"><label>Conducta a seguir</label><textarea id="pe-conducta" rows="3"></textarea></div>
+  </div>
+
+  <button class="btn btn-azul" onclick="guardarSeccion('primera')">Guardar Primera Evolución</button>
+</div>
+
+<!-- ══════════ EVOLUCIÓN MÉDICA ══════════ -->
+<div class="pantalla" id="p-evolucion">
+  <div id="evolucion-lista-header" style="margin-bottom:12px;">
+    <button class="btn btn-verde" onclick="nuevaEvolucion()" style="margin-bottom:0;">+ Nueva evolución médica</button>
+  </div>
+  <div id="lista-evoluciones">
+    <p style="color:var(--gris);font-size:13px;text-align:center;padding:20px 0;">Sin evoluciones registradas todavía.</p>
+  </div>
+</div>
+
+<!-- ══════════ LISTA / REGISTROS ══════════ -->
+<div class="pantalla" id="p-lista">
+  <div class="card">
+    <div class="card-titulo">Todos los pacientes</div>
+    <div id="todos-pacientes">
+      <p style="color:var(--gris);font-size:13px;text-align:center;padding:12px 0;">Sin pacientes registrados.</p>
+    </div>
+  </div>
+  <button class="btn btn-rojo" onclick="confirmarBorrarTodo()">Borrar todos los datos</button>
+</div>
+
+<!-- ══════════ MODAL NUEVA EVOLUCIÓN ══════════ -->
+<div id="modal-overlay">
+  <div id="modal-box">
+    <h3>Nueva evolución médica</h3>
+    <div class="fila2">
+      <div class="campo"><label>Fecha</label><input type="date" id="ev-fecha"></div>
+      <div class="campo"><label>Edad</label><input type="text" id="ev-edad"></div>
+    </div>
+    <div class="fila2">
+      <div class="campo"><label>Hora</label><input type="time" id="ev-hora"></div>
+      <div class="campo"><label>Traído por</label><input type="text" id="ev-traido"></div>
+    </div>
+    <div class="campo"><label>EH</label><textarea id="ev-eh" rows="2"></textarea></div>
+    <div class="campo"><label>ES</label><textarea id="ev-es" rows="2"></textarea></div>
+    <div class="campo"><label>Impresión diagnóstica</label><textarea id="ev-dx" rows="2"></textarea></div>
+    <div class="campo"><label>Antimicrobianos</label><input type="text" id="ev-anti"></div>
+    <div class="campo"><label>Procederes</label><textarea id="ev-proc" rows="2"></textarea></div>
+    <div class="campo">
+      <label>Comentario</label>
+      <textarea id="ev-comentario-hga" rows="3" placeholder="(x) de (x) edad, (x)"></textarea>
+    </div>
+    <hr class="sep">
+    <div class="card-titulo" style="margin-bottom:10px;">Examen físico por sistemas</div>
+    <div class="campo"><label>TCS</label><input type="text" id="ev-tcs"></div>
+    <div class="campo"><label>P y M</label><input type="text" id="ev-pym"></div>
+    <div class="sistema-row">
+      <div class="campo"><label>S.R</label><input type="text" id="ev-sr"></div>
+      <div class="campo"><label>FR</label><input type="text" id="ev-fr"></div>
+      <div class="campo"><label>SO</label><input type="text" id="ev-so"></div>
+    </div>
+    <div class="sistema-row">
+      <div class="campo"><label>S.Cv</label><input type="text" id="ev-scv"></div>
+      <div class="campo"><label>FC</label><input type="text" id="ev-fc"></div>
+      <div class="campo"><label>Llenado cap. (s)</label><input type="text" id="ev-llenado"></div>
+    </div>
+    <div class="campo"><label>Abd</label><input type="text" id="ev-abd"></div>
+    <div class="campo"><label>SNC</label><input type="text" id="ev-snc"></div>
+    <div class="campo"><label>S.H</label><input type="text" id="ev-sh"></div>
+    <div class="fila3">
+      <div class="campo"><label>SOMA M</label><input type="text" id="ev-soma-m"></div>
+      <div class="campo"><label>H</label><input type="text" id="ev-soma-h"></div>
+      <div class="campo"><label>A</label><input type="text" id="ev-soma-a"></div>
+    </div>
+    <div class="campo"><label>Otros</label><textarea id="ev-otros" rows="2"></textarea></div>
+    <div class="campo"><label>Comentario médico</label><textarea id="ev-comentario" rows="3"></textarea></div>
+    <div class="campo"><label>Conducta a seguir</label><textarea id="ev-conducta" rows="3"></textarea></div>
+    <div class="fila2">
+      <div class="campo"><label>Nombre</label><input type="text" id="ev-nombre"></div>
+      <div class="campo"><label>(x)</label><input type="text" id="ev-x"></div>
+    </div>
+    <hr class="sep">
+    <button class="btn btn-verde" onclick="guardarEvolucion()">Guardar evolución</button>
+    <button class="btn btn-gris" onclick="cerrarModal()">Cancelar</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════
+//  ESTADO GLOBAL
+// ═══════════════════════════════════════
+let pacienteActivo = null; // id del paciente activo
+let datos = cargarDatos();
+
+// ── SISTEMA DE ALMACENAMIENTO HÍBRIDO (compatible con Kodular WebViewer) ──
+var _memStore = {};  // fallback en memoria
+
+function cargarDatos() {
+  try {
+    var raw = localStorage.getItem('hc_pediatrica');
+    if (raw) return JSON.parse(raw);
+    // Intentar leer desde Android (Kodular KV storage via JS bridge)
+    if (window.AppInventor && window.AppInventor.getWebViewString) {
+      var kv = window.AppInventor.getWebViewString();
+      if (kv && kv.startsWith('{')) return JSON.parse(kv);
+    }
+    return _memStore;
+  } catch(e) { return _memStore; }
+}
+
+function guardarDatos() {
+  try {
+    localStorage.setItem('hc_pediatrica', JSON.stringify(datos));
+  } catch(e) {}
+  // Enviar a Kodular via WebViewString para que lo guarde en TinyDB
+  try {
+    if (window.AppInventor && window.AppInventor.setWebViewString) {
+      window.AppInventor.setWebViewString(JSON.stringify(datos));
+    }
+  } catch(e) {}
+  _memStore = datos;
+}
+
+// Función llamable desde Kodular para restaurar datos
+function restaurarDesdeKodular(jsonStr) {
+  try {
+    datos = JSON.parse(jsonStr);
+    renderListaInicio();
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════
+//  NAVEGACIÓN
+// ═══════════════════════════════════════
+const TABS = ['inicio','historia','examen','primera','evolucion','lista'];
+
+function irA(tab) {
+  TABS.forEach(t => {
+    document.getElementById('p-'+t).classList.remove('activa');
+  });
+  document.getElementById('p-'+tab).classList.add('activa');
+  document.querySelectorAll('nav button').forEach((btn, i) => {
+    btn.classList.toggle('active', TABS[i] === tab);
+  });
+  if (tab === 'inicio') renderListaInicio();
+  if (tab === 'lista')  renderTodosPacientes();
+  if (tab === 'evolucion') renderEvoluciones();
+  if (tab !== 'inicio' && !pacienteActivo) {
+    mostrarToast('Selecciona un paciente primero desde Inicio');
+    setTimeout(() => irA('inicio'), 1500);
+    return;
+  }
+  if (['historia','examen','primera'].includes(tab) && pacienteActivo) {
+    cargarFormulario(tab);
+  }
+}
+
+// ═══════════════════════════════════════
+//  PACIENTES
+// ═══════════════════════════════════════
+function crearPaciente() {
+  const nombre = document.getElementById('nuevo-nombre').value.trim();
+  if (!nombre) { mostrarToast('Escribe el nombre del paciente'); return; }
+  const id = 'pac_' + Date.now();
+  datos[id] = { id, nombre, creadoEn: new Date().toLocaleDateString('es-ES'), historia: {}, examen: {}, primera: {}, evoluciones: [] };
+  guardarDatos();
+  document.getElementById('nuevo-nombre').value = '';
+  seleccionarPaciente(id);
+  renderListaInicio();
+  mostrarToast('Paciente creado: ' + nombre);
+}
+
+function seleccionarPaciente(id) {
+  pacienteActivo = id;
+  const p = datos[id];
+  const badge = document.getElementById('paciente-badge');
+  badge.textContent = 'Paciente activo: ' + p.nombre;
+  badge.style.display = 'block';
+  document.querySelectorAll('.paciente-card').forEach(c => {
+    c.classList.toggle('seleccionado', c.dataset.id === id);
+  });
+}
+
+function renderListaInicio() {
+  const cont = document.getElementById('lista-pacientes-inicio');
+  const ids = Object.keys(datos);
+  if (!ids.length) {
+    cont.innerHTML = '<p style="color:var(--gris);font-size:13px;text-align:center;padding:12px 0;">Sin pacientes aún. Crea uno arriba.</p>';
+    return;
+  }
+  cont.innerHTML = ids.map(id => {
+    const p = datos[id];
+    const ev = p.evoluciones ? p.evoluciones.length : 0;
+    const iniciales = p.nombre.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
+    return `<div class="paciente-card ${pacienteActivo===id?'seleccionado':''}" data-id="${id}" onclick="seleccionarPaciente('${id}')">
+      <div class="paciente-avatar">${iniciales}</div>
+      <div class="paciente-info"><h3>${p.nombre}</h3><p>Creado: ${p.creadoEn}</p></div>
+      <div class="paciente-meta"><span>${ev} evoluc.</span></div>
+    </div>`;
+  }).join('');
+}
+
+function renderTodosPacientes() {
+  const cont = document.getElementById('todos-pacientes');
+  const ids = Object.keys(datos);
+  if (!ids.length) { cont.innerHTML = '<p style="color:var(--gris);font-size:13px;text-align:center;padding:12px 0;">Sin pacientes.</p>'; return; }
+  cont.innerHTML = ids.map(id => {
+    const p = datos[id];
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--borde);">
+      <strong>${p.nombre}</strong> &nbsp;<small style="color:var(--gris)">${p.creadoEn}</small><br>
+      <small style="color:var(--gris)">Evoluciones: ${p.evoluciones?.length||0}</small>
+      <button onclick="seleccionarPaciente('${id}');irA('historia')" style="float:right;background:var(--azul-claro);color:var(--azul);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;">Abrir</button>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════
+//  GUARDAR / CARGAR FORMULARIOS
+// ═══════════════════════════════════════
+function recogerCampos(prefijo) {
+  const obj = {};
+  document.querySelectorAll(`[id^="${prefijo}-"]`).forEach(el => {
+    obj[el.id] = el.value;
+  });
+  return obj;
+}
+
+function rellenarCampos(obj) {
+  if (!obj) return;
+  Object.keys(obj).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = obj[id] || '';
+  });
+}
+
+function guardarSeccion(seccion) {
+  if (!pacienteActivo) { mostrarToast('Selecciona un paciente primero'); return; }
+  const prefijos = { historia: 'hc', examen: 'ef', primera: 'pe' };
+  datos[pacienteActivo][seccion] = recogerCampos(prefijos[seccion]);
+  guardarDatos();
+  mostrarToast('Guardado correctamente');
+}
+
+function cargarFormulario(seccion) {
+  if (!pacienteActivo) return;
+  const prefijos = { historia: 'hc', examen: 'ef', primera: 'pe' };
+  rellenarCampos(datos[pacienteActivo][seccion]);
+}
+
+// ═══════════════════════════════════════
+//  EVOLUCIONES
+// ═══════════════════════════════════════
+function renderEvoluciones() {
+  if (!pacienteActivo) return;
+  const evs = datos[pacienteActivo].evoluciones || [];
+  const cont = document.getElementById('lista-evoluciones');
+  if (!evs.length) {
+    cont.innerHTML = '<p style="color:var(--gris);font-size:13px;text-align:center;padding:20px 0;">Sin evoluciones registradas todavía.</p>';
+    return;
+  }
+  cont.innerHTML = evs.map((ev, i) => `
+    <div class="evolucion-item" onclick="verEvolucion(${i})">
+      <div class="ev-info">
+        <h4>Evolución ${i+1}</h4>
+        <p>${ev['ev-fecha']||'Sin fecha'} &nbsp;·&nbsp; ${ev['ev-hora']||''}</p>
+      </div>
+      <span class="ev-tipo">Médica</span>
+    </div>`).join('');
+}
+
+function nuevaEvolucion() {
+  if (!pacienteActivo) { mostrarToast('Selecciona un paciente primero'); return; }
+  // Limpiar campos del modal
+  document.querySelectorAll('#modal-box input, #modal-box textarea').forEach(el => el.value = '');
+  // Poner fecha y hora actuales
+  const hoy = new Date();
+  document.getElementById('ev-fecha').value = hoy.toISOString().split('T')[0];
+  document.getElementById('ev-hora').value = hoy.toTimeString().slice(0,5);
+  document.getElementById('modal-overlay').classList.add('abierto');
+}
+
+function cerrarModal() {
+  document.getElementById('modal-overlay').classList.remove('abierto');
+}
+
+function guardarEvolucion() {
+  if (!pacienteActivo) return;
+  const ev = recogerCampos('ev');
+  if (!datos[pacienteActivo].evoluciones) datos[pacienteActivo].evoluciones = [];
+  datos[pacienteActivo].evoluciones.push(ev);
+  guardarDatos();
+  cerrarModal();
+  renderEvoluciones();
+  mostrarToast('Evolución guardada');
+}
+
+function verEvolucion(i) {
+  const ev = datos[pacienteActivo].evoluciones[i];
+  // Abrir modal con datos
+  document.querySelectorAll('#modal-box input, #modal-box textarea').forEach(el => {
+    el.value = ev[el.id] || '';
+  });
+  document.getElementById('modal-overlay').classList.add('abierto');
+}
+
+// ═══════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════
+let toastTimer;
+function mostrarToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('visible'), 2500);
+}
+
+// ═══════════════════════════════════════
+//  BORRAR TODO
+// ═══════════════════════════════════════
+function confirmarBorrarTodo() {
+  if (confirm('¿Seguro que quieres borrar TODOS los datos? Esta acción no se puede deshacer.')) {
+    localStorage.removeItem('hc_pediatrica');
+    datos = {};
+    pacienteActivo = null;
+    document.getElementById('paciente-badge').style.display = 'none';
+    renderTodosPacientes();
+    mostrarToast('Todos los datos eliminados');
+  }
+}
+
+// ═══════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════
+renderListaInicio();
+</script>
+</body>
+</html>
